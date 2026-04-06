@@ -772,11 +772,12 @@ function DashboardPage({ user }: { user: UserRecord }) {
   }, [startCamera, stopCamera]);
 
   useEffect(() => {
+    if (user?.class === "teacher") return;
     startCamera();
     return () => {
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
-  }, [startCamera]);
+  }, [startCamera, user?.class]);
 
   useEffect(() => {
     if (cameraActive && videoRef.current && streamRef.current) {
@@ -831,6 +832,8 @@ function DashboardPage({ user }: { user: UserRecord }) {
     return () => { clearInterval(intv); clearTimeout(t); };
   }, [triggerScan, cameraEnabled]);
 
+  const isTeacher = user?.class === "teacher";
+
   return (
     <div style={{ padding: "24px 24px 24px 88px", minHeight: "100vh" }}>
       {fraudSim && (
@@ -842,112 +845,201 @@ function DashboardPage({ user }: { user: UserRecord }) {
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>Live Scanner</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700 }}>{isTeacher ? "Live Monitoring" : "Live Scanner"}</h1>
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Welcome back, {user?.name || "Admin"} — {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}</p>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
-          {/* Camera Toggle Button */}
-          <button
-            onClick={toggleCamera}
-            title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
-            style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "8px 18px", borderRadius: 10, cursor: "pointer",
-              fontFamily: "Poppins", fontSize: 12, fontWeight: 600,
-              border: `1px solid ${cameraEnabled ? RED_ALERT : CYAN}55`,
-              background: cameraEnabled ? `${RED_ALERT}11` : `${CYAN}11`,
-              color: cameraEnabled ? RED_ALERT : CYAN,
-              transition: "all 0.25s",
-              boxShadow: cameraEnabled ? `0 0 12px ${RED_ALERT}22` : `0 0 12px ${CYAN}22`,
-            }}
-          >
-            <Camera size={14} />
-            {cameraEnabled ? "Camera ON" : "Camera OFF"}
-            <div style={{
-              width: 28, height: 16, borderRadius: 8,
-              background: cameraEnabled ? `${RED_ALERT}33` : "rgba(255,255,255,0.08)",
-              border: `1px solid ${cameraEnabled ? RED_ALERT : "rgba(255,255,255,0.15)"}55`,
-              display: "flex", alignItems: "center",
-              padding: "0 2px",
-              justifyContent: cameraEnabled ? "flex-end" : "flex-start",
-              transition: "all 0.25s",
-            }}>
-              <div style={{
-                width: 12, height: 12, borderRadius: "50%",
-                background: cameraEnabled ? RED_ALERT : "rgba(255,255,255,0.2)",
+          {!isTeacher && (
+            <button
+              onClick={toggleCamera}
+              title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 18px", borderRadius: 10, cursor: "pointer",
+                fontFamily: "Poppins", fontSize: 12, fontWeight: 600,
+                border: `1px solid ${cameraEnabled ? RED_ALERT : CYAN}55`,
+                background: cameraEnabled ? `${RED_ALERT}11` : `${CYAN}11`,
+                color: cameraEnabled ? RED_ALERT : CYAN,
                 transition: "all 0.25s",
-              }} />
-            </div>
-          </button>
+                boxShadow: cameraEnabled ? `0 0 12px ${RED_ALERT}22` : `0 0 12px ${CYAN}22`,
+              }}
+            >
+              <Camera size={14} />
+              {cameraEnabled ? "Camera ON" : "Camera OFF"}
+              <div style={{ width: 28, height: 16, borderRadius: 8, background: cameraEnabled ? `${RED_ALERT}33` : "rgba(255,255,255,0.08)", border: `1px solid ${cameraEnabled ? RED_ALERT : "rgba(255,255,255,0.15)"}55`, display: "flex", alignItems: "center", padding: "0 2px", justifyContent: cameraEnabled ? "flex-end" : "flex-start", transition: "all 0.25s" }}>
+                <div style={{ width: 12, height: 12, borderRadius: "50%", background: cameraEnabled ? RED_ALERT : "rgba(255,255,255,0.2)", transition: "all 0.25s" }} />
+              </div>
+            </button>
+          )}
+          {isTeacher && (
+            <button
+              onClick={toggleCamera}
+              title={cameraEnabled ? "Pause Monitoring" : "Resume Monitoring"}
+              style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: "8px 18px", borderRadius: 10, cursor: "pointer",
+                fontFamily: "Poppins", fontSize: 12, fontWeight: 600,
+                border: `1px solid ${cameraEnabled ? EMERALD : "rgba(255,255,255,0.2)"}55`,
+                background: cameraEnabled ? `${EMERALD}11` : "rgba(255,255,255,0.04)",
+                color: cameraEnabled ? EMERALD : "rgba(255,255,255,0.4)",
+                transition: "all 0.25s",
+              }}
+            >
+              {cameraEnabled ? <><Activity size={14} /> Monitoring ON</> : <><Activity size={14} /> Monitoring OFF</>}
+              <div style={{ width: 28, height: 16, borderRadius: 8, background: cameraEnabled ? `${EMERALD}33` : "rgba(255,255,255,0.08)", border: `1px solid ${cameraEnabled ? EMERALD : "rgba(255,255,255,0.15)"}55`, display: "flex", alignItems: "center", padding: "0 2px", justifyContent: cameraEnabled ? "flex-end" : "flex-start", transition: "all 0.25s" }}>
+                <div style={{ width: 12, height: 12, borderRadius: "50%", background: cameraEnabled ? EMERALD : "rgba(255,255,255,0.2)", transition: "all 0.25s" }} />
+              </div>
+            </button>
+          )}
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: cameraEnabled ? EMERALD : "rgba(255,255,255,0.2)", animation: cameraEnabled ? "dotPulse 1.5s ease infinite" : "none" }} />
           <span style={{ fontSize: 11, color: cameraEnabled ? EMERALD : "rgba(255,255,255,0.35)" }}>{cameraEnabled ? "System Active" : "System Paused"}</span>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isTeacher ? "repeat(4,1fr)" : "repeat(3,1fr)", gap: 12, marginBottom: 24 }}>
         <StatCard icon={Users} label="Total Enrolled" value="60" sub="+3 this week" delay={0} />
-        <StatCard icon={CheckCircle} label="Present Today" value="52" color={EMERALD} sub="86.7% attendance" delay={0.1} />
+        <StatCard icon={CheckCircle} label="Present Today" value={String(log.filter(e => e.status === "present").length + 49)} color={EMERALD} sub={`${Math.round((log.filter(e => e.status === "present").length + 49) / 60 * 100)}% attendance`} delay={0.1} />
         <StatCard icon={Activity} label="Accuracy Rate" value="99.2%" color={AMBER} sub="Anti-spoof active" delay={0.2} />
+        {isTeacher && <StatCard icon={Shield} label="Fraud Blocked" value={String(log.filter(e => e.status === "fraud").length)} color={RED_ALERT} sub="This session" delay={0.3} />}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
-        <div style={{ ...glass, padding: 28, borderColor: `${CYAN}22`, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, alignSelf: "stretch" }}>
-            <Scan size={14} color={CYAN} />
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Face Recognition HUD</span>
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, animation: cameraEnabled && cameraActive ? "blink 1.5s ease infinite" : "none" }} />
-              <span style={{ fontSize: 10, color: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, letterSpacing: 1 }}>
-                {cameraEnabled && cameraActive ? "LIVE" : "OFF"}
-              </span>
+
+        {/* ── TEACHER: Live Monitoring Feed ── */}
+        {isTeacher && (
+          <div style={{ ...glass, padding: 24, borderColor: `${CYAN}22`, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <Scan size={14} color={CYAN} />
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Live Monitoring Feed</span>
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: cameraEnabled ? EMERALD : RED_ALERT, animation: cameraEnabled ? "blink 1.5s ease infinite" : "none" }} />
+                <span style={{ fontSize: 10, color: cameraEnabled ? EMERALD : RED_ALERT, letterSpacing: 1 }}>{cameraEnabled ? "LIVE" : "PAUSED"}</span>
+              </div>
+            </div>
+
+            {/* Currently scanning card */}
+            <div style={{ ...glass, padding: 20, borderColor: scanning ? `${CYAN}66` : recognized ? `${EMERALD}55` : fraudAlert ? `${RED_ALERT}55` : `${CYAN}22`, boxShadow: scanning ? `0 0 24px ${CYAN}22` : recognized ? `0 0 24px ${EMERALD}22` : fraudAlert ? `0 0 24px ${RED_ALERT}33` : "none", transition: "all 0.4s" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                {/* Animated scan avatar */}
+                <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: "50%", background: scanning ? `${CYAN}15` : recognized ? `${EMERALD}15` : fraudAlert ? `${RED_ALERT}15` : "rgba(255,255,255,0.04)", border: `2px solid ${scanning ? CYAN : recognized ? EMERALD : fraudAlert ? RED_ALERT : "rgba(255,255,255,0.1)"}`, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.3s" }}>
+                    {fraudAlert ? <AlertTriangle size={22} color={RED_ALERT} /> : recognized ? <CheckCircle size={22} color={EMERALD} /> : <Scan size={22} color={scanning ? CYAN : "rgba(255,255,255,0.2)"} style={scanning ? { animation: "pulse 1s ease infinite" } : {}} />}
+                  </div>
+                  {scanning && <div style={{ position: "absolute", inset: -4, borderRadius: "50%", border: `2px solid ${CYAN}44`, animation: "spin 2s linear infinite" }} />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: scanning ? CYAN : recognized ? EMERALD : fraudAlert ? RED_ALERT : "rgba(255,255,255,0.5)", transition: "color 0.3s" }}>
+                    {scanning ? "Scanning face..." : recognized ? lastRecognized || "Student identified" : fraudAlert ? "Spoofing attempt detected!" : cameraEnabled ? "Waiting for next student..." : "Monitoring paused"}
+                  </p>
+                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>
+                    {scanning ? "Running liveness · anti-spoof · depth checks" : recognized ? "All AI checks passed — attendance recorded" : fraudAlert ? "Photo/proxy spoofing — access denied & logged" : cameraEnabled ? "Auto-scanning every 8 seconds" : "Click Monitoring ON to resume"}
+                  </p>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontSize: 11, padding: "4px 12px", borderRadius: 20, background: scanning ? `${CYAN}15` : recognized ? `${EMERALD}15` : fraudAlert ? `${RED_ALERT}15` : "rgba(255,255,255,0.05)", color: scanning ? CYAN : recognized ? EMERALD : fraudAlert ? RED_ALERT : "rgba(255,255,255,0.3)", border: `1px solid ${scanning ? CYAN : recognized ? EMERALD : fraudAlert ? RED_ALERT : "rgba(255,255,255,0.1)"}33`, transition: "all 0.3s" }}>
+                    {scanning ? "Processing" : recognized ? "Verified" : fraudAlert ? "BLOCKED" : "Standby"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* AI check status row */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[
+                { label: "Liveness", active: cameraEnabled },
+                { label: "Anti-Spoof", active: cameraEnabled },
+                { label: "Multi-Face", active: cameraEnabled },
+                { label: "Low-Light", active: cameraEnabled },
+              ].map(({ label, active }) => (
+                <div key={label} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${active ? EMERALD : "rgba(255,255,255,0.1)"}`, background: active ? `${EMERALD}11` : "transparent", fontSize: 10, color: active ? EMERALD : "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", gap: 4, transition: "all 0.3s" }}>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: active ? EMERALD : "rgba(255,255,255,0.2)", transition: "all 0.3s" }} /> {label}
+                </div>
+              ))}
+              <div style={{ marginLeft: "auto", padding: "5px 12px", borderRadius: 20, border: `1px solid ${CYAN}33`, background: `${CYAN}0A`, fontSize: 10, color: CYAN, display: "flex", alignItems: "center", gap: 4 }}>
+                <Clock size={9} /> Auto-scan 8s
+              </div>
+            </div>
+
+            {/* Recent scan queue — last 4 processed */}
+            <div>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Recent Scans</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {log.slice(0, 4).map((e, i) => {
+                  const c = e.status === "fraud" ? RED_ALERT : EMERALD;
+                  const initials = e.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+                  return (
+                    <div key={`${e.name}-${e.time}-${i}`} className={i === 0 ? "slide-in" : ""} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderRadius: 10, background: `${c}08`, border: `1px solid ${c}22` }}>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: `${c}15`, border: `1px solid ${c}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, color: c, flexShrink: 0 }}>{initials}</div>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>{e.name}</span>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginLeft: 6 }}>{e.roll}</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{e.time}</span>
+                      {e.status === "fraud"
+                        ? <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, background: `${RED_ALERT}15`, color: RED_ALERT, border: `1px solid ${RED_ALERT}33`, fontWeight: 700 }}>BLOCKED</span>
+                        : <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, background: `${EMERALD}15`, color: EMERALD, border: `1px solid ${EMERALD}33` }}>{e.conf}%</span>
+                      }
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Camera OFF overlay wrapper */}
-          <div style={{ position: "relative" }}>
-            <ScannerHUD scanning={scanning && cameraEnabled} recognized={recognized} fraudAlert={fraudAlert} videoRef={videoRef} cameraActive={cameraActive && cameraEnabled} />
-            {!cameraEnabled && (
-              <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, zIndex: 10 }}>
-                <Camera size={28} color="rgba(255,255,255,0.2)" />
-                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Camera Off</span>
+        {/* ── STUDENT: Personal Face Recognition HUD ── */}
+        {!isTeacher && (
+          <div style={{ ...glass, padding: 28, borderColor: `${CYAN}22`, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, alignSelf: "stretch" }}>
+              <Scan size={14} color={CYAN} />
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Face Recognition HUD</span>
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, animation: cameraEnabled && cameraActive ? "blink 1.5s ease infinite" : "none" }} />
+                <span style={{ fontSize: 10, color: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, letterSpacing: 1 }}>{cameraEnabled && cameraActive ? "LIVE" : "OFF"}</span>
+              </div>
+            </div>
+            <div style={{ position: "relative" }}>
+              <ScannerHUD scanning={scanning && cameraEnabled} recognized={recognized} fraudAlert={fraudAlert} videoRef={videoRef} cameraActive={cameraActive && cameraEnabled} />
+              {!cameraEnabled && (
+                <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, zIndex: 10 }}>
+                  <Camera size={28} color="rgba(255,255,255,0.2)" />
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Camera Off</span>
+                </div>
+              )}
+            </div>
+            {fraudAlert && (
+              <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}44`, ...neonRed, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                <AlertTriangle size={14} color={RED_ALERT} />
+                <span style={{ fontSize: 12, color: RED_ALERT }}>FRAUD DETECTED — Photo/Proxy spoofing attempt blocked</span>
               </div>
             )}
-          </div>
-
-          {fraudAlert && (
-            <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}44`, ...neonRed, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-              <AlertTriangle size={14} color={RED_ALERT} />
-              <span style={{ fontSize: 12, color: RED_ALERT }}>FRAUD DETECTED — Photo/Proxy spoofing attempt blocked</span>
-            </div>
-          )}
-          {recognized && !fraudAlert && (
-            <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${EMERALD}44`, ...neonGreen, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-              <CheckCircle size={14} color={EMERALD} />
-              <span style={{ fontSize: 12, color: EMERALD }}>
-                {lastRecognized ? `${lastRecognized} — Attendance marked` : "Attendance marked — Liveness confirmed"}
-              </span>
-            </div>
-          )}
-          {!cameraEnabled && (
-            <div style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}22`, background: `${RED_ALERT}08`, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-              <Camera size={14} color={RED_ALERT} />
-              <span style={{ fontSize: 12, color: RED_ALERT, fontWeight: 600 }}>System paused — turn camera ON to resume scanning</span>
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-            {[
-              { label: "Liveness", active: cameraEnabled }, { label: "Anti-Spoof", active: cameraEnabled },
-              { label: "Multi-Face", active: cameraEnabled }, { label: "Low-Light OK", active: cameraEnabled },
-            ].map(({ label, active }) => (
-              <div key={label} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${active ? EMERALD : "rgba(255,255,255,0.1)"}`, background: active ? `${EMERALD}11` : "transparent", fontSize: 10, color: active ? EMERALD : "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", gap: 4, transition: "all 0.3s" }}>
-                <div style={{ width: 5, height: 5, borderRadius: "50%", background: active ? EMERALD : "rgba(255,255,255,0.2)", transition: "all 0.3s" }} /> {label}
+            {recognized && !fraudAlert && (
+              <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${EMERALD}44`, ...neonGreen, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                <CheckCircle size={14} color={EMERALD} />
+                <span style={{ fontSize: 12, color: EMERALD }}>{lastRecognized ? `${lastRecognized} — Attendance marked` : "Attendance marked — Liveness confirmed"}</span>
               </div>
-            ))}
+            )}
+            {!cameraEnabled && (
+              <div style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}22`, background: `${RED_ALERT}08`, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                <Camera size={14} color={RED_ALERT} />
+                <span style={{ fontSize: 12, color: RED_ALERT, fontWeight: 600 }}>System paused — turn camera ON to resume scanning</span>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+              {[
+                { label: "Liveness", active: cameraEnabled }, { label: "Anti-Spoof", active: cameraEnabled },
+                { label: "Multi-Face", active: cameraEnabled }, { label: "Low-Light OK", active: cameraEnabled },
+              ].map(({ label, active }) => (
+                <div key={label} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${active ? EMERALD : "rgba(255,255,255,0.1)"}`, background: active ? `${EMERALD}11` : "transparent", fontSize: 10, color: active ? EMERALD : "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", gap: 4, transition: "all 0.3s" }}>
+                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: active ? EMERALD : "rgba(255,255,255,0.2)", transition: "all 0.3s" }} /> {label}
+                </div>
+              ))}
+            </div>
+            <button onClick={triggerScan} disabled={scanning} style={{ padding: "13px 40px", border: `1px solid ${CYAN}`, borderRadius: 12, background: scanning ? `${CYAN}08` : `${CYAN}15`, color: CYAN, fontSize: 14, fontWeight: 600, cursor: scanning ? "not-allowed" : "pointer", fontFamily: "Poppins", ...neonCyan, transition: "all 0.2s" }}>
+              {scanning ? <><RefreshCw size={14} style={{ display: "inline", marginRight: 8, animation: "spin 1s linear infinite" }} />Scanning...</> : <><Zap size={14} style={{ display: "inline", marginRight: 8 }} />Mark Attendance</>}
+            </button>
           </div>
-          <button onClick={triggerScan} disabled={scanning} style={{ padding: "13px 40px", border: `1px solid ${CYAN}`, borderRadius: 12, background: scanning ? `${CYAN}08` : `${CYAN}15`, color: CYAN, fontSize: 14, fontWeight: 600, cursor: scanning ? "not-allowed" : "pointer", fontFamily: "Poppins", ...neonCyan, transition: "all 0.2s" }}>
-            {scanning ? <><RefreshCw size={14} style={{ display: "inline", marginRight: 8, animation: "spin 1s linear infinite" }} />Scanning...</> : <><Zap size={14} style={{ display: "inline", marginRight: 8 }} />Mark Attendance</>}
-          </button>
-        </div>
+        )}
 
         <div style={{ ...glass, padding: 20, borderColor: `${EMERALD}22`, display: "flex", flexDirection: "column", gap: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>

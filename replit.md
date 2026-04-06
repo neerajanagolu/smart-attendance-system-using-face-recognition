@@ -16,6 +16,10 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+## Artifacts
+
+- **smart-attendance** (`artifacts/smart-attendance`): Smart Attendance AI-powered face recognition app. React + Vite. Served at `/`. Includes login, registration with custom password, face scan anti-fraud, dashboard, attendance reports, and student/teacher views.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages

@@ -733,27 +733,50 @@ function DashboardPage({ user }: { user: UserRecord }) {
   const [fraudAlert, setFraudAlert] = useState(false);
   const [log, setLog] = useState(liveLog.slice(0, 3));
   const [logIdx, setLogIdx] = useState(3);
+  const [studentIdx, setStudentIdx] = useState(0);
   const [fraudSim, setFraudSim] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+  const [lastRecognized, setLastRecognized] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
-      .then(stream => {
-        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        setCameraActive(true);
-      })
-      .catch(() => {});
+  const startCamera = useCallback(async () => {
+    if (streamRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false });
+      streamRef.current = stream;
+      setCameraActive(true);
+    } catch {}
+  }, []);
 
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  const toggleCamera = useCallback(() => {
+    setCameraEnabled(prev => {
+      if (prev) {
+        stopCamera();
+        return false;
+      } else {
+        startCamera();
+        return true;
+      }
+    });
+  }, [startCamera, stopCamera]);
+
+  useEffect(() => {
+    startCamera();
     return () => {
-      active = false;
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
-  }, []);
+  }, [startCamera]);
 
   useEffect(() => {
     if (cameraActive && videoRef.current && streamRef.current) {
@@ -777,16 +800,22 @@ function DashboardPage({ user }: { user: UserRecord }) {
             setFraudAlert(isFraud);
             setRecognized(!isFraud);
             setFraudSim(isFraud);
+            if (!isFraud) setLastRecognized(next.name);
             setTimeout(() => { setRecognized(false); setFraudAlert(false); setFraudSim(false); }, 3500);
             return currentIdx + 1;
           } else {
-            const s2 = DEFAULT_STUDENTS[Math.floor(Math.random() * DEFAULT_STUDENTS.length)];
-            const now = new Date();
-            const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
-            const entry = { name: s2.name, time: timeStr, status: "present", roll: s2.roll, conf: parseFloat((95 + Math.random() * 4.5).toFixed(1)) };
-            setLog(l => [entry, ...l].slice(0, 10));
-            setRecognized(true);
-            setTimeout(() => setRecognized(false), 3000);
+            setStudentIdx(sIdx => {
+              const nextStudentIdx = sIdx % DEFAULT_STUDENTS.length;
+              const s2 = DEFAULT_STUDENTS[nextStudentIdx];
+              const now = new Date();
+              const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+              const entry = { name: s2.name, time: timeStr, status: "present", roll: s2.roll, conf: parseFloat((95 + Math.random() * 4.5).toFixed(1)) };
+              setLog(l => [entry, ...l].slice(0, 10));
+              setRecognized(true);
+              setLastRecognized(s2.name);
+              setTimeout(() => setRecognized(false), 3000);
+              return nextStudentIdx + 1;
+            });
             return currentIdx;
           }
         });
@@ -797,8 +826,8 @@ function DashboardPage({ user }: { user: UserRecord }) {
 
   useEffect(() => {
     const intv = setInterval(() => { triggerScan(); }, 8000);
-    setTimeout(() => triggerScan(), 3000);
-    return () => clearInterval(intv);
+    const t = setTimeout(() => triggerScan(), 3000);
+    return () => { clearInterval(intv); clearTimeout(t); };
   }, [triggerScan]);
 
   return (
@@ -815,7 +844,40 @@ function DashboardPage({ user }: { user: UserRecord }) {
           <h1 style={{ fontSize: 20, fontWeight: 700 }}>Live Scanner</h1>
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Welcome back, {user?.name || "Admin"} — {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}</p>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+          {/* Camera Toggle Button */}
+          <button
+            onClick={toggleCamera}
+            title={cameraEnabled ? "Turn Camera Off" : "Turn Camera On"}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "8px 18px", borderRadius: 10, cursor: "pointer",
+              fontFamily: "Poppins", fontSize: 12, fontWeight: 600,
+              border: `1px solid ${cameraEnabled ? RED_ALERT : CYAN}55`,
+              background: cameraEnabled ? `${RED_ALERT}11` : `${CYAN}11`,
+              color: cameraEnabled ? RED_ALERT : CYAN,
+              transition: "all 0.25s",
+              boxShadow: cameraEnabled ? `0 0 12px ${RED_ALERT}22` : `0 0 12px ${CYAN}22`,
+            }}
+          >
+            <Camera size={14} />
+            {cameraEnabled ? "Camera ON" : "Camera OFF"}
+            <div style={{
+              width: 28, height: 16, borderRadius: 8,
+              background: cameraEnabled ? `${RED_ALERT}33` : "rgba(255,255,255,0.08)",
+              border: `1px solid ${cameraEnabled ? RED_ALERT : "rgba(255,255,255,0.15)"}55`,
+              display: "flex", alignItems: "center",
+              padding: "0 2px",
+              justifyContent: cameraEnabled ? "flex-end" : "flex-start",
+              transition: "all 0.25s",
+            }}>
+              <div style={{
+                width: 12, height: 12, borderRadius: "50%",
+                background: cameraEnabled ? RED_ALERT : "rgba(255,255,255,0.2)",
+                transition: "all 0.25s",
+              }} />
+            </div>
+          </button>
           <div style={{ width: 8, height: 8, borderRadius: "50%", background: EMERALD, animation: "dotPulse 1.5s ease infinite" }} />
           <span style={{ fontSize: 11, color: EMERALD }}>System Active</span>
         </div>
@@ -829,11 +891,28 @@ function DashboardPage({ user }: { user: UserRecord }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}>
         <div style={{ ...glass, padding: 28, borderColor: `${CYAN}22`, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, alignSelf: "flex-start" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, alignSelf: "stretch" }}>
             <Scan size={14} color={CYAN} />
             <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Face Recognition HUD</span>
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, animation: cameraEnabled && cameraActive ? "blink 1.5s ease infinite" : "none" }} />
+              <span style={{ fontSize: 10, color: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, letterSpacing: 1 }}>
+                {cameraEnabled && cameraActive ? "LIVE" : "OFF"}
+              </span>
+            </div>
           </div>
-          <ScannerHUD scanning={scanning} recognized={recognized} fraudAlert={fraudAlert} videoRef={videoRef} cameraActive={cameraActive} />
+
+          {/* Camera OFF overlay wrapper */}
+          <div style={{ position: "relative" }}>
+            <ScannerHUD scanning={scanning && cameraEnabled} recognized={recognized} fraudAlert={fraudAlert} videoRef={videoRef} cameraActive={cameraActive && cameraEnabled} />
+            {!cameraEnabled && (
+              <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, zIndex: 10 }}>
+                <Camera size={28} color="rgba(255,255,255,0.2)" />
+                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Camera Off</span>
+              </div>
+            )}
+          </div>
+
           {fraudAlert && (
             <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}44`, ...neonRed, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
               <AlertTriangle size={14} color={RED_ALERT} />
@@ -843,16 +922,24 @@ function DashboardPage({ user }: { user: UserRecord }) {
           {recognized && !fraudAlert && (
             <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${EMERALD}44`, ...neonGreen, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
               <CheckCircle size={14} color={EMERALD} />
-              <span style={{ fontSize: 12, color: EMERALD }}>Attendance marked — Liveness confirmed</span>
+              <span style={{ fontSize: 12, color: EMERALD }}>
+                {lastRecognized ? `${lastRecognized} — Attendance marked` : "Attendance marked — Liveness confirmed"}
+              </span>
+            </div>
+          )}
+          {!cameraEnabled && (
+            <div style={{ ...glass, padding: "10px 16px", borderColor: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+              <Camera size={14} color="rgba(255,255,255,0.3)" />
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Camera is off — attendance scanning continues in background</span>
             </div>
           )}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
             {[
-              { label: "Liveness", active: true }, { label: "Anti-Spoof", active: true },
-              { label: "Multi-Face", active: true }, { label: "Low-Light OK", active: true },
+              { label: "Liveness", active: cameraEnabled }, { label: "Anti-Spoof", active: cameraEnabled },
+              { label: "Multi-Face", active: cameraEnabled }, { label: "Low-Light OK", active: cameraEnabled },
             ].map(({ label, active }) => (
-              <div key={label} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${active ? EMERALD : "rgba(255,255,255,0.1)"}`, background: active ? `${EMERALD}11` : "transparent", fontSize: 10, color: active ? EMERALD : "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", gap: 4 }}>
-                <div style={{ width: 5, height: 5, borderRadius: "50%", background: active ? EMERALD : "rgba(255,255,255,0.2)" }} /> {label}
+              <div key={label} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${active ? EMERALD : "rgba(255,255,255,0.1)"}`, background: active ? `${EMERALD}11` : "transparent", fontSize: 10, color: active ? EMERALD : "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", gap: 4, transition: "all 0.3s" }}>
+                <div style={{ width: 5, height: 5, borderRadius: "50%", background: active ? EMERALD : "rgba(255,255,255,0.2)", transition: "all 0.3s" }} /> {label}
               </div>
             ))}
           </div>

@@ -929,9 +929,9 @@ function DashboardPage({ user }: { user: UserRecord }) {
             </div>
           )}
           {!cameraEnabled && (
-            <div style={{ ...glass, padding: "10px 16px", borderColor: "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-              <Camera size={14} color="rgba(255,255,255,0.3)" />
-              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Camera is off — attendance scanning continues in background</span>
+            <div style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}22`, background: `${RED_ALERT}08`, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+              <Camera size={14} color={RED_ALERT} />
+              <span style={{ fontSize: 12, color: RED_ALERT, fontWeight: 600 }}>System paused — turn camera ON to resume scanning</span>
             </div>
           )}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
@@ -1120,6 +1120,26 @@ function StudentDashboard({ user }: { user: UserRecord }) {
   const pct = Math.round(me.present / me.total * 100);
   const absentDays = me.total - me.present;
 
+  // Teacher editable records state
+  const [students, setStudents] = useState<Student[]>([...DEFAULT_STUDENTS]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editVals, setEditVals] = useState<{ present: number; total: number }>({ present: 0, total: 0 });
+  const [savedId, setSavedId] = useState<string | null>(null);
+
+  const startEdit = (s: Student) => {
+    setEditingId(s.id);
+    setEditVals({ present: s.present, total: s.total });
+  };
+
+  const cancelEdit = () => setEditingId(null);
+
+  const saveEdit = (id: string) => {
+    setStudents(prev => prev.map(s => s.id === id ? { ...s, present: Math.min(editVals.present, editVals.total), total: editVals.total } : s));
+    setEditingId(null);
+    setSavedId(id);
+    setTimeout(() => setSavedId(null), 2500);
+  };
+
   const subjectData = [
     { subject: "Data Structures & Algorithms", code: "DSA", present: 14, total: 15 },
     { subject: "Machine Learning", code: "ML", present: 12, total: 15 },
@@ -1223,27 +1243,98 @@ function StudentDashboard({ user }: { user: UserRecord }) {
       )}
 
       {isTeacher && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {DEFAULT_STUDENTS.map((s, i) => {
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <Users size={14} color={CYAN} />
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Student Records</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{students.length} students · Click Edit to modify records</span>
+          </div>
+
+          {students.map((s, i) => {
             const p = Math.round(s.present / s.total * 100);
             const c = p >= 75 ? EMERALD : p >= 60 ? AMBER : RED_ALERT;
+            const isEditing = editingId === s.id;
+            const isSaved = savedId === s.id;
+
             return (
-              <div key={s.id} className="fade-up" style={{ ...glass, padding: "14px 20px", borderColor: `${c}22`, display: "flex", alignItems: "center", gap: 14, animation: `fadeUp 0.3s ease ${i * 0.05}s both` }}>
-                <Avatar initials={s.photo} size={40} color={c} />
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</p>
-                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{s.roll} · {s.dept} Year {s.year}</p>
+              <div key={s.id} className="fade-up" style={{ ...glass, padding: "16px 20px", borderColor: isEditing ? `${CYAN}55` : isSaved ? `${EMERALD}55` : `${c}22`, boxShadow: isEditing ? `0 0 20px ${CYAN}22` : isSaved ? `0 0 20px ${EMERALD}22` : "none", transition: "all 0.3s", animation: `fadeUp 0.3s ease ${i * 0.05}s both` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <Avatar initials={s.photo} size={40} color={isEditing ? CYAN : c} />
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</p>
+                    <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>{s.roll} · {s.dept} · Year {s.year}</p>
+                  </div>
+
+                  {!isEditing ? (
+                    <>
+                      <div style={{ textAlign: "center", minWidth: 80 }}>
+                        <p style={{ fontSize: 20, fontWeight: 800, color: c }}>{p}%</p>
+                        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>{s.present}/{s.total} classes</p>
+                      </div>
+                      <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.08)" }}>
+                        <div style={{ height: "100%", width: `${p}%`, borderRadius: 4, background: c, transition: "width 1s ease" }} />
+                      </div>
+                      <span style={{ fontSize: 11, padding: "4px 12px", borderRadius: 20, background: `${c}15`, color: c, border: `1px solid ${c}33`, minWidth: 64, textAlign: "center" }}>
+                        {p >= 75 ? "Good" : p >= 60 ? "Low" : "Critical"}
+                      </span>
+                      {isSaved && (
+                        <span style={{ fontSize: 11, padding: "4px 12px", borderRadius: 20, background: `${EMERALD}15`, color: EMERALD, border: `1px solid ${EMERALD}44`, display: "flex", alignItems: "center", gap: 4 }}>
+                          <CheckCircle size={11} /> Saved
+                        </span>
+                      )}
+                      <button
+                        onClick={() => startEdit(s)}
+                        style={{ padding: "7px 16px", borderRadius: 8, border: `1px solid ${CYAN}44`, background: `${CYAN}0D`, color: CYAN, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "Poppins", display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s" }}
+                      >
+                        <RefreshCw size={12} /> Edit
+                      </button>
+                    </>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase" }}>Classes Present</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={editVals.total}
+                          value={editVals.present}
+                          onChange={e => setEditVals(v => ({ ...v, present: Math.max(0, parseInt(e.target.value) || 0) }))}
+                          style={{ width: 72, padding: "6px 10px", borderRadius: 8, border: `1px solid ${CYAN}55`, background: "rgba(0,245,255,0.06)", color: CYAN, fontSize: 14, fontWeight: 700, fontFamily: "Poppins", textAlign: "center" }}
+                        />
+                      </div>
+                      <span style={{ fontSize: 16, color: "rgba(255,255,255,0.2)", marginTop: 14 }}>/</span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase" }}>Total Classes</label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={editVals.total}
+                          onChange={e => setEditVals(v => ({ ...v, total: Math.max(1, parseInt(e.target.value) || 1) }))}
+                          style={{ width: 72, padding: "6px 10px", borderRadius: 8, border: `1px solid rgba(255,255,255,0.15)`, background: "rgba(255,255,255,0.05)", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "Poppins", textAlign: "center" }}
+                        />
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 14 }}>
+                        <span style={{ fontSize: 18, fontWeight: 800, color: (() => { const pp = Math.round(editVals.present / editVals.total * 100); return pp >= 75 ? EMERALD : pp >= 60 ? AMBER : RED_ALERT; })() }}>
+                          {Math.round(editVals.present / editVals.total * 100)}%
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                        <button
+                          onClick={() => saveEdit(s.id)}
+                          style={{ padding: "7px 16px", borderRadius: 8, border: `1px solid ${EMERALD}55`, background: `${EMERALD}15`, color: EMERALD, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "Poppins", display: "flex", alignItems: "center", gap: 5 }}
+                        >
+                          <CheckCircle size={12} /> Save
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          style={{ padding: "7px 12px", borderRadius: 8, border: `1px solid rgba(255,255,255,0.15)`, background: "transparent", color: "rgba(255,255,255,0.4)", fontSize: 12, cursor: "pointer", fontFamily: "Poppins" }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ textAlign: "center" }}>
-                  <p style={{ fontSize: 18, fontWeight: 800, color: c }}>{p}%</p>
-                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>{s.present}/{s.total} classes</p>
-                </div>
-                <div style={{ width: 80, height: 6, borderRadius: 4, background: "rgba(255,255,255,0.08)" }}>
-                  <div style={{ height: "100%", width: `${p}%`, borderRadius: 4, background: c, transition: "width 1s ease" }} />
-                </div>
-                <span style={{ fontSize: 11, padding: "4px 12px", borderRadius: 20, background: `${c}15`, color: c, border: `1px solid ${c}33`, minWidth: 64, textAlign: "center" }}>
-                  {p >= 75 ? "Good" : p >= 60 ? "Low" : "Critical"}
-                </span>
               </div>
             );
           })}

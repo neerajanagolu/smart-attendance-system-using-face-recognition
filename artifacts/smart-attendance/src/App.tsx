@@ -825,10 +825,11 @@ function DashboardPage({ user }: { user: UserRecord }) {
   }, []);
 
   useEffect(() => {
+    if (!cameraEnabled) return;
     const intv = setInterval(() => { triggerScan(); }, 8000);
     const t = setTimeout(() => triggerScan(), 3000);
     return () => { clearInterval(intv); clearTimeout(t); };
-  }, [triggerScan]);
+  }, [triggerScan, cameraEnabled]);
 
   return (
     <div style={{ padding: "24px 24px 24px 88px", minHeight: "100vh" }}>
@@ -878,8 +879,8 @@ function DashboardPage({ user }: { user: UserRecord }) {
               }} />
             </div>
           </button>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: EMERALD, animation: "dotPulse 1.5s ease infinite" }} />
-          <span style={{ fontSize: 11, color: EMERALD }}>System Active</span>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: cameraEnabled ? EMERALD : "rgba(255,255,255,0.2)", animation: cameraEnabled ? "dotPulse 1.5s ease infinite" : "none" }} />
+          <span style={{ fontSize: 11, color: cameraEnabled ? EMERALD : "rgba(255,255,255,0.35)" }}>{cameraEnabled ? "System Active" : "System Paused"}</span>
         </div>
       </div>
 
@@ -1120,11 +1121,12 @@ function StudentDashboard({ user }: { user: UserRecord }) {
   const absentDays = me.total - me.present;
 
   const subjectData = [
-    { subject: "DSA", present: 14, total: 15 },
-    { subject: "ML", present: 12, total: 15 },
-    { subject: "DBMS", present: 10, total: 15 },
-    { subject: "OS", present: 11, total: 15 },
-    { subject: "CN", present: 9, total: 15 },
+    { subject: "Data Structures & Algorithms", code: "DSA", present: 14, total: 15 },
+    { subject: "Machine Learning", code: "ML", present: 12, total: 15 },
+    { subject: "Database Management", code: "DBMS", present: 10, total: 15 },
+    { subject: "Operating Systems", code: "OS", present: 11, total: 15 },
+    { subject: "Computer Networks", code: "CN", present: 9, total: 15 },
+    { subject: "Software Engineering", code: "SE", present: 13, total: 15 },
   ];
 
   return (
@@ -1145,25 +1147,48 @@ function StudentDashboard({ user }: { user: UserRecord }) {
             <StatCard icon={Award} label="Ranking" value="#2" color={CYAN} delay={0.15} />
           </div>
 
+          {/* Subject-wise Attendance Cards */}
+          <div style={{ ...glass, padding: 20, borderColor: `${CYAN}22`, marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <BookOpen size={14} color={CYAN} />
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Subject-wise Attendance</p>
+              <span style={{ marginLeft: "auto", fontSize: 10, color: "rgba(255,255,255,0.3)" }}>Min. 75% required</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {subjectData.map((s, i) => {
+                const spct = Math.round(s.present / s.total * 100);
+                const sc = spct >= 75 ? EMERALD : spct >= 60 ? AMBER : RED_ALERT;
+                const needed = spct < 75 ? Math.max(0, Math.ceil((0.75 * s.total - s.present) / 0.25)) : 0;
+                return (
+                  <div key={s.code} className="fade-up" style={{ ...glass, padding: "14px 16px", borderColor: `${sc}22`, animation: `fadeUp 0.3s ease ${i * 0.06}s both` }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div>
+                        <p style={{ fontSize: 12, fontWeight: 600, color: "#fff", lineHeight: 1.3 }}>{s.subject}</p>
+                        <p style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>{s.code} · {s.present}/{s.total} classes</p>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: sc, lineHeight: 1 }}>{spct}%</div>
+                        <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 10, background: `${sc}15`, color: sc, border: `1px solid ${sc}33` }}>
+                          {spct >= 75 ? "OK" : spct >= 60 ? "Low" : "Critical"}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ height: 5, borderRadius: 4, background: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${spct}%`, borderRadius: 4, background: sc, transition: "width 1s ease" }} />
+                    </div>
+                    {needed > 0 && (
+                      <p style={{ fontSize: 9, color: AMBER, marginTop: 5 }}>⚠ Attend {needed} more class{needed > 1 ? "es" : ""} to reach 75%</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
             <div style={{ ...glass, padding: 20, borderColor: `${CYAN}22` }}>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Subject-wise Attendance</p>
-              <div style={{ height: 180 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={subjectData} layout="vertical">
-                    <XAxis type="number" domain={[0, 15]} tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="subject" tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 11 }} axisLine={false} tickLine={false} width={40} />
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                    <Tooltip contentStyle={{ background: "#111", border: `1px solid ${CYAN}44`, borderRadius: 8, fontFamily: "Poppins" }} />
-                    <Bar dataKey="present" fill={CYAN} radius={[0, 4, 4, 0]} opacity={0.8} name="Present" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div style={{ ...glass, padding: 20, borderColor: `${CYAN}22` }}>
               <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Overall Overview</p>
-              <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+              <div style={{ height: 160, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={[{ name: "Present", value: me.present }, { name: "Absent", value: absentDays }]} cx="50%" cy="50%" innerRadius={52} outerRadius={76} dataKey="value" strokeWidth={0} startAngle={90} endAngle={-270}>
@@ -1178,20 +1203,20 @@ function StudentDashboard({ user }: { user: UserRecord }) {
                 </div>
               </div>
             </div>
-          </div>
 
-          <div style={{ ...glass, padding: 20, borderColor: `${CYAN}22` }}>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Trend — Last 6 Months</p>
-            <div style={{ height: 160 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                  <XAxis dataKey="month" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[60, 100]} tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: "#111", border: `1px solid ${CYAN}44`, borderRadius: 8, fontFamily: "Poppins" }} />
-                  <Line type="monotone" dataKey="rate" stroke={CYAN} strokeWidth={2} dot={{ fill: CYAN, r: 4 }} activeDot={{ r: 6, fill: EMERALD }} name="Attendance %" />
-                </LineChart>
-              </ResponsiveContainer>
+            <div style={{ ...glass, padding: 20, borderColor: `${CYAN}22` }}>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Trend — Last 6 Months</p>
+              <div style={{ height: 160 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={monthlyData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="month" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis domain={[60, 100]} tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ background: "#111", border: `1px solid ${CYAN}44`, borderRadius: 8, fontFamily: "Poppins" }} />
+                    <Line type="monotone" dataKey="rate" stroke={CYAN} strokeWidth={2} dot={{ fill: CYAN, r: 4 }} activeDot={{ r: 6, fill: EMERALD }} name="Attendance %" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </>

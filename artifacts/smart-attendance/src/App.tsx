@@ -1114,14 +1114,32 @@ function AttendancePage() {
   );
 }
 
-function StudentDashboard({ user }: { user: UserRecord }) {
+function StudentDashboard({ user, registeredUsers }: { user: UserRecord; registeredUsers: UserRecord[] }) {
   const isTeacher = user?.class === "teacher";
   const me = DEFAULT_STUDENTS.find(s => s.roll === (user as Student).roll) || DEFAULT_STUDENTS[0];
   const pct = Math.round(me.present / me.total * 100);
   const absentDays = me.total - me.present;
 
+  const registeredStudents = registeredUsers.filter(u => u.class === "student") as Student[];
+  const allStudents = [
+    ...DEFAULT_STUDENTS,
+    ...registeredStudents.filter(rs => !DEFAULT_STUDENTS.some(ds => ds.roll === rs.roll)),
+  ];
+
   // Teacher editable records state
-  const [students, setStudents] = useState<Student[]>([...DEFAULT_STUDENTS]);
+  const [students, setStudents] = useState<Student[]>(allStudents);
+
+  useEffect(() => {
+    const updatedRegistered = registeredUsers.filter(u => u.class === "student") as Student[];
+    const merged = [
+      ...DEFAULT_STUDENTS,
+      ...updatedRegistered.filter(rs => !DEFAULT_STUDENTS.some(ds => ds.roll === rs.roll)),
+    ];
+    setStudents(prev => merged.map(ms => {
+      const edited = prev.find(p => p.id === ms.id);
+      return edited ?? ms;
+    }));
+  }, [registeredUsers]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<{ present: number; total: number }>({ present: 0, total: 0 });
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -1344,11 +1362,28 @@ function StudentDashboard({ user }: { user: UserRecord }) {
   );
 }
 
+const STORAGE_KEY = "sa_registered_users";
+
+function loadStoredUsers(): UserRecord[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as UserRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   const [screen, setScreen] = useState<"login" | "register" | "app">("login");
   const [user, setUser] = useState<UserRecord | null>(null);
   const [page, setPage] = useState("dashboard");
-  const [registeredUsers, setRegisteredUsers] = useState<UserRecord[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<UserRecord[]>(loadStoredUsers);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(registeredUsers));
+    } catch {}
+  }, [registeredUsers]);
 
   const handleLogin = (u: UserRecord | { goto: string }) => {
     if ("goto" in u && u.goto === "register") { setScreen("register"); return; }
@@ -1357,7 +1392,14 @@ export default function App() {
   };
 
   const handleRegister = (newUser: UserRecord) => {
-    setRegisteredUsers(prev => [...prev, newUser]);
+    setRegisteredUsers(prev => {
+      const already = prev.some(u => {
+        const id = u.class === "student" ? (u as Student).roll : (u as Teacher).empId;
+        const newId = newUser.class === "student" ? (newUser as Student).roll : (newUser as Teacher).empId;
+        return id === newId;
+      });
+      return already ? prev : [...prev, newUser];
+    });
   };
 
   return (
@@ -1378,25 +1420,84 @@ export default function App() {
               <Sidebar page={page} setPage={setPage} user={user} onLogout={() => { setUser(null); setScreen("login"); setPage("dashboard"); }} />
               {page === "dashboard" && <DashboardPage user={user} />}
               {page === "attendance" && <AttendancePage />}
-              {page === "students" && <StudentDashboard user={user} />}
+              {page === "students" && <StudentDashboard user={user} registeredUsers={registeredUsers} />}
               {page === "settings" && (
                 <div style={{ padding: "24px 24px 24px 88px" }}>
                   <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>Settings</h1>
-                  <div style={{ ...glass, padding: 28, borderColor: `${CYAN}22`, maxWidth: 480 }}>
-                    <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)" }}>Logged in as: <span style={{ color: CYAN }}>{user?.name}</span></p>
-                    <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>
-                      Role: {user?.class} · {user?.class === "student" ? (user as Student).roll : (user as Teacher).empId}
-                    </p>
-                    <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>Detection Settings</p>
-                      {["Anti-spoofing protection", "Liveness detection", "Multi-face detection", "Low-light enhancement"].map(s => (
-                        <div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                          <span style={{ fontSize: 13 }}>{s}</span>
-                          <div style={{ width: 36, height: 20, borderRadius: 10, background: `${EMERALD}33`, border: `1px solid ${EMERALD}44`, display: "flex", alignItems: "center", padding: "0 2px", justifyContent: "flex-end" }}>
-                            <div style={{ width: 16, height: 16, borderRadius: "50%", background: EMERALD }} />
-                          </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, maxWidth: 900 }}>
+                    {/* Profile + Detection */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      <div style={{ ...glass, padding: 24, borderColor: `${CYAN}22` }}>
+                        <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)" }}>Logged in as: <span style={{ color: CYAN }}>{user?.name}</span></p>
+                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 6 }}>
+                          Role: {user?.class} · {user?.class === "student" ? (user as Student).roll : (user as Teacher).empId}
+                        </p>
+                        <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 12 }}>Detection Settings</p>
+                          {["Anti-spoofing protection", "Liveness detection", "Multi-face detection", "Low-light enhancement"].map(s => (
+                            <div key={s} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                              <span style={{ fontSize: 13 }}>{s}</span>
+                              <div style={{ width: 36, height: 20, borderRadius: 10, background: `${EMERALD}33`, border: `1px solid ${EMERALD}44`, display: "flex", alignItems: "center", padding: "0 2px", justifyContent: "flex-end" }}>
+                                <div style={{ width: 16, height: 16, borderRadius: "50%", background: EMERALD }} />
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      </div>
+                    </div>
+
+                    {/* Registration History */}
+                    <div style={{ ...glass, padding: 24, borderColor: `${CYAN}22` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                        <UserPlus size={14} color={CYAN} />
+                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Registration History</p>
+                        <span style={{ marginLeft: "auto", fontSize: 11, padding: "2px 10px", borderRadius: 12, background: `${CYAN}15`, color: CYAN, border: `1px solid ${CYAN}33` }}>
+                          {registeredUsers.length} registered
+                        </span>
+                      </div>
+
+                      {registeredUsers.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "32px 0", color: "rgba(255,255,255,0.2)" }}>
+                          <UserPlus size={28} color="rgba(255,255,255,0.1)" style={{ margin: "0 auto 10px" }} />
+                          <p style={{ fontSize: 12 }}>No registrations yet</p>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 340, overflowY: "auto" }}>
+                          {registeredUsers.map((ru, i) => {
+                            const rid = ru.class === "student" ? (ru as Student).roll : (ru as Teacher).empId;
+                            const initials = ru.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
+                            const color = ru.class === "teacher" ? AMBER : CYAN;
+                            return (
+                              <div key={i} className="fade-up" style={{ ...glass, padding: "10px 14px", borderColor: `${color}22`, display: "flex", alignItems: "center", gap: 10, animation: `fadeUp 0.3s ease ${i * 0.04}s both` }}>
+                                <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${color}15`, border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
+                                  {initials}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ru.name}</p>
+                                  <p style={{ fontSize: 10, color: "rgba(255,255,255,0.35)" }}>{rid} · {ru.dept}</p>
+                                </div>
+                                <span style={{ fontSize: 9, padding: "3px 9px", borderRadius: 10, background: `${color}15`, color, border: `1px solid ${color}33`, flexShrink: 0, textTransform: "capitalize" }}>
+                                  {ru.class}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {registeredUsers.length > 0 && user?.class === "teacher" && (
+                        <button
+                          onClick={() => {
+                            if (confirm("Clear all registration history? This cannot be undone.")) {
+                              localStorage.removeItem(STORAGE_KEY);
+                              window.location.reload();
+                            }
+                          }}
+                          style={{ marginTop: 14, width: "100%", padding: "8px", borderRadius: 8, border: `1px solid ${RED_ALERT}44`, background: `${RED_ALERT}0A`, color: RED_ALERT, fontSize: 11, cursor: "pointer", fontFamily: "Poppins", fontWeight: 600 }}
+                        >
+                          Clear Registration History
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

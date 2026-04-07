@@ -3,7 +3,7 @@ import {
   LayoutDashboard, History, Settings, Users, Camera, Shield,
   AlertTriangle, CheckCircle, Bell, LogOut, Eye, UserPlus,
   BookOpen, TrendingUp, Clock, Scan, Zap, Activity, Award,
-  ChevronRight, RefreshCw, X, Menu, User, GraduationCap
+  ChevronRight, RefreshCw, X, Menu, User, GraduationCap, Download
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -727,7 +727,16 @@ function RegisterPage({ onBack, onRegister }: {
   );
 }
 
-function DashboardPage({ user }: { user: UserRecord }) {
+function DashboardPage({ user, attendanceLog, onMarkAttendance }: {
+  user: UserRecord;
+  attendanceLog: AttendanceRecord[];
+  onMarkAttendance: (r: AttendanceRecord) => void;
+}) {
+  const isTeacher = user?.class === "teacher";
+  const today = new Date().toISOString().split("T")[0];
+  const userId = user.id;
+  const todayEntry = !isTeacher ? attendanceLog.find(r => r.userId === userId && r.date === today) : undefined;
+
   const [scanning, setScanning] = useState(false);
   const [recognized, setRecognized] = useState(false);
   const [fraudAlert, setFraudAlert] = useState(false);
@@ -737,6 +746,8 @@ function DashboardPage({ user }: { user: UserRecord }) {
   const [fraudSim, setFraudSim] = useState(false);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [lastRecognized, setLastRecognized] = useState<string | null>(null);
+  const [repeatFraud, setRepeatFraud] = useState(false);
+  const markedThisSessionRef = useRef(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -790,56 +801,79 @@ function DashboardPage({ user }: { user: UserRecord }) {
   const triggerScan = useCallback(() => {
     setScanning(s => {
       if (s) return s;
-      setRecognized(false); setFraudAlert(false);
+      setRecognized(false); setFraudAlert(false); setRepeatFraud(false);
       setTimeout(() => {
         setScanning(false);
-        setLogIdx(currentIdx => {
-          if (currentIdx < liveLog.length) {
-            const next = liveLog[currentIdx];
-            const isFraud = next.status === "fraud";
-            setLog(l => [next, ...l].slice(0, 10));
-            setFraudAlert(isFraud);
-            setRecognized(!isFraud);
-            setFraudSim(isFraud);
-            if (!isFraud) setLastRecognized(next.name);
-            setTimeout(() => { setRecognized(false); setFraudAlert(false); setFraudSim(false); }, 3500);
-            return currentIdx + 1;
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
+
+        if (!isTeacher) {
+          const roll = (user as Student).roll || "—";
+          const dept = (user as Student).dept || "";
+          if (markedThisSessionRef.current) {
+            const entry = { name: user.name, time: timeStr, status: "fraud" as const, roll, conf: 0 };
+            setLog(l => [entry, ...l].slice(0, 10));
+            setFraudAlert(true); setFraudSim(true); setRepeatFraud(true);
+            setTimeout(() => { setFraudAlert(false); setFraudSim(false); setRepeatFraud(false); }, 4000);
           } else {
-            setStudentIdx(sIdx => {
-              const nextStudentIdx = sIdx % DEFAULT_STUDENTS.length;
-              const s2 = DEFAULT_STUDENTS[nextStudentIdx];
-              const now = new Date();
-              const timeStr = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
-              const entry = { name: s2.name, time: timeStr, status: "present", roll: s2.roll, conf: parseFloat((95 + Math.random() * 4.5).toFixed(1)) };
-              setLog(l => [entry, ...l].slice(0, 10));
-              setRecognized(true);
-              setLastRecognized(s2.name);
-              setTimeout(() => setRecognized(false), 3000);
-              return nextStudentIdx + 1;
-            });
-            return currentIdx;
+            const entry = { name: user.name, time: timeStr, status: "present" as const, roll, conf: parseFloat((95 + Math.random() * 4.5).toFixed(1)) };
+            setLog(l => [entry, ...l].slice(0, 10));
+            setRecognized(true);
+            setLastRecognized(user.name);
+            markedThisSessionRef.current = true;
+            onMarkAttendance({ userId: user.id, name: user.name, roll, dept, date: new Date().toISOString().split("T")[0], time: timeStr, status: "present" });
+            setTimeout(() => setRecognized(false), 3500);
           }
-        });
+        } else {
+          setLogIdx(currentIdx => {
+            if (currentIdx < liveLog.length) {
+              const next = liveLog[currentIdx];
+              const isFraud = next.status === "fraud";
+              setLog(l => [next, ...l].slice(0, 10));
+              setFraudAlert(isFraud);
+              setRecognized(!isFraud);
+              setFraudSim(isFraud);
+              if (!isFraud) setLastRecognized(next.name);
+              setTimeout(() => { setRecognized(false); setFraudAlert(false); setFraudSim(false); }, 3500);
+              return currentIdx + 1;
+            } else {
+              setStudentIdx(sIdx => {
+                const nextStudentIdx = sIdx % DEFAULT_STUDENTS.length;
+                const s2 = DEFAULT_STUDENTS[nextStudentIdx];
+                const entry = { name: s2.name, time: timeStr, status: "present" as const, roll: s2.roll, conf: parseFloat((95 + Math.random() * 4.5).toFixed(1)) };
+                setLog(l => [entry, ...l].slice(0, 10));
+                setRecognized(true);
+                setLastRecognized(s2.name);
+                setTimeout(() => setRecognized(false), 3000);
+                return nextStudentIdx + 1;
+              });
+              return currentIdx;
+            }
+          });
+        }
       }, 2200);
       return true;
     });
-  }, []);
+  }, [isTeacher, user, onMarkAttendance]);
 
   useEffect(() => {
     if (!cameraEnabled) return;
+    if (!isTeacher && (todayEntry || markedThisSessionRef.current)) return;
     const intv = setInterval(() => { triggerScan(); }, 8000);
     const t = setTimeout(() => triggerScan(), 3000);
     return () => { clearInterval(intv); clearTimeout(t); };
-  }, [triggerScan, cameraEnabled]);
-
-  const isTeacher = user?.class === "teacher";
+  }, [triggerScan, cameraEnabled, isTeacher, todayEntry]);
 
   return (
     <div style={{ padding: "24px 24px 24px 88px", minHeight: "100vh" }}>
       {fraudSim && (
         <div className="slide-in" style={{ ...glass, padding: "12px 20px", borderColor: `${RED_ALERT}55`, marginBottom: 16, background: `${RED_ALERT}08`, animation: "fraudFlash 0.5s ease infinite", display: "flex", alignItems: "center", gap: 10 }}>
           <AlertTriangle size={16} color={RED_ALERT} />
-          <span style={{ fontSize: 13, color: RED_ALERT, fontWeight: 700 }}>FRAUD ALERT — Photo/Proxy spoofing attempt blocked and logged</span>
+          <span style={{ fontSize: 13, color: RED_ALERT, fontWeight: 700 }}>
+            {repeatFraud
+              ? `PHOTO SPOOFING DETECTED — ${user.name}: Attendance already marked. Duplicate scan blocked.`
+              : "FRAUD ALERT — Photo/Proxy spoofing attempt blocked and logged"}
+          </span>
         </div>
       )}
 
@@ -989,55 +1023,79 @@ function DashboardPage({ user }: { user: UserRecord }) {
 
         {/* ── STUDENT: Personal Face Recognition HUD ── */}
         {!isTeacher && (
-          <div style={{ ...glass, padding: 28, borderColor: `${CYAN}22`, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+          <div style={{ ...glass, padding: 28, borderColor: todayEntry ? `${EMERALD}33` : `${CYAN}22`, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, alignSelf: "stretch" }}>
-              <Scan size={14} color={CYAN} />
+              <Scan size={14} color={todayEntry ? EMERALD : CYAN} />
               <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Face Recognition HUD</span>
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: "50%", background: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, animation: cameraEnabled && cameraActive ? "blink 1.5s ease infinite" : "none" }} />
-                <span style={{ fontSize: 10, color: cameraEnabled && cameraActive ? EMERALD : RED_ALERT, letterSpacing: 1 }}>{cameraEnabled && cameraActive ? "LIVE" : "OFF"}</span>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: todayEntry ? EMERALD : (cameraEnabled && cameraActive ? EMERALD : RED_ALERT), animation: (todayEntry || (cameraEnabled && cameraActive)) ? "blink 1.5s ease infinite" : "none" }} />
+                <span style={{ fontSize: 10, color: todayEntry ? EMERALD : (cameraEnabled && cameraActive ? EMERALD : RED_ALERT), letterSpacing: 1 }}>{todayEntry ? "MARKED" : (cameraEnabled && cameraActive ? "LIVE" : "OFF")}</span>
               </div>
             </div>
-            <div style={{ position: "relative" }}>
-              <ScannerHUD scanning={scanning && cameraEnabled} recognized={recognized} fraudAlert={fraudAlert} videoRef={videoRef} cameraActive={cameraActive && cameraEnabled} />
-              {!cameraEnabled && (
-                <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, zIndex: 10 }}>
-                  <Camera size={28} color="rgba(255,255,255,0.2)" />
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Camera Off</span>
+
+            {todayEntry ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, width: "100%", padding: "20px 0" }}>
+                <div style={{ width: 80, height: 80, borderRadius: "50%", background: `${EMERALD}15`, border: `2px solid ${EMERALD}`, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 0 32px ${EMERALD}44` }}>
+                  <CheckCircle size={36} color={EMERALD} />
                 </div>
-              )}
-            </div>
-            {fraudAlert && (
-              <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}44`, ...neonRed, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                <AlertTriangle size={14} color={RED_ALERT} />
-                <span style={{ fontSize: 12, color: RED_ALERT }}>FRAUD DETECTED — Photo/Proxy spoofing attempt blocked</span>
-              </div>
-            )}
-            {recognized && !fraudAlert && (
-              <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${EMERALD}44`, ...neonGreen, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                <CheckCircle size={14} color={EMERALD} />
-                <span style={{ fontSize: 12, color: EMERALD }}>{lastRecognized ? `${lastRecognized} — Attendance marked` : "Attendance marked — Liveness confirmed"}</span>
-              </div>
-            )}
-            {!cameraEnabled && (
-              <div style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}22`, background: `${RED_ALERT}08`, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                <Camera size={14} color={RED_ALERT} />
-                <span style={{ fontSize: 12, color: RED_ALERT, fontWeight: 600 }}>System paused — turn camera ON to resume scanning</span>
-              </div>
-            )}
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-              {[
-                { label: "Liveness", active: cameraEnabled }, { label: "Anti-Spoof", active: cameraEnabled },
-                { label: "Multi-Face", active: cameraEnabled }, { label: "Low-Light OK", active: cameraEnabled },
-              ].map(({ label, active }) => (
-                <div key={label} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${active ? EMERALD : "rgba(255,255,255,0.1)"}`, background: active ? `${EMERALD}11` : "transparent", fontSize: 10, color: active ? EMERALD : "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", gap: 4, transition: "all 0.3s" }}>
-                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: active ? EMERALD : "rgba(255,255,255,0.2)", transition: "all 0.3s" }} /> {label}
+                <div style={{ textAlign: "center" }}>
+                  <p style={{ fontSize: 16, fontWeight: 700, color: EMERALD }}>Attendance Already Marked</p>
+                  <p style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 4 }}>{todayEntry.name} · {todayEntry.roll}</p>
+                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>Date: {todayEntry.date} · Time: {todayEntry.time}</p>
                 </div>
-              ))}
-            </div>
-            <button onClick={triggerScan} disabled={scanning} style={{ padding: "13px 40px", border: `1px solid ${CYAN}`, borderRadius: 12, background: scanning ? `${CYAN}08` : `${CYAN}15`, color: CYAN, fontSize: 14, fontWeight: 600, cursor: scanning ? "not-allowed" : "pointer", fontFamily: "Poppins", ...neonCyan, transition: "all 0.2s" }}>
-              {scanning ? <><RefreshCw size={14} style={{ display: "inline", marginRight: 8, animation: "spin 1s linear infinite" }} />Scanning...</> : <><Zap size={14} style={{ display: "inline", marginRight: 8 }} />Mark Attendance</>}
-            </button>
+                <div style={{ ...glass, padding: "10px 20px", borderColor: `${EMERALD}44`, ...neonGreen, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Shield size={13} color={EMERALD} />
+                  <span style={{ fontSize: 12, color: EMERALD }}>Attendance confirmed for today. Any further scan will be flagged as photo spoofing.</span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ position: "relative" }}>
+                  <ScannerHUD scanning={scanning && cameraEnabled} recognized={recognized} fraudAlert={fraudAlert} videoRef={videoRef} cameraActive={cameraActive && cameraEnabled} />
+                  {!cameraEnabled && (
+                    <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "rgba(0,0,0,0.85)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, zIndex: 10 }}>
+                      <Camera size={28} color="rgba(255,255,255,0.2)" />
+                      <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Camera Off</span>
+                    </div>
+                  )}
+                </div>
+                {fraudAlert && (
+                  <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}44`, ...neonRed, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                    <AlertTriangle size={14} color={RED_ALERT} />
+                    <span style={{ fontSize: 12, color: RED_ALERT }}>
+                      {repeatFraud
+                        ? `PHOTO SPOOFING — ${user.name}: Attendance already marked. Duplicate scan blocked.`
+                        : "FRAUD DETECTED — Photo/Proxy spoofing attempt blocked"}
+                    </span>
+                  </div>
+                )}
+                {recognized && !fraudAlert && (
+                  <div className="slide-in" style={{ ...glass, padding: "10px 16px", borderColor: `${EMERALD}44`, ...neonGreen, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                    <CheckCircle size={14} color={EMERALD} />
+                    <span style={{ fontSize: 12, color: EMERALD }}>{lastRecognized ? `${lastRecognized} — Attendance marked` : "Attendance marked — Liveness confirmed"}</span>
+                  </div>
+                )}
+                {!cameraEnabled && (
+                  <div style={{ ...glass, padding: "10px 16px", borderColor: `${RED_ALERT}22`, background: `${RED_ALERT}08`, display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                    <Camera size={14} color={RED_ALERT} />
+                    <span style={{ fontSize: 12, color: RED_ALERT, fontWeight: 600 }}>System paused — turn camera ON to resume scanning</span>
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+                  {[
+                    { label: "Liveness", active: cameraEnabled }, { label: "Anti-Spoof", active: cameraEnabled },
+                    { label: "Multi-Face", active: cameraEnabled }, { label: "Low-Light OK", active: cameraEnabled },
+                  ].map(({ label, active }) => (
+                    <div key={label} style={{ padding: "4px 12px", borderRadius: 20, border: `1px solid ${active ? EMERALD : "rgba(255,255,255,0.1)"}`, background: active ? `${EMERALD}11` : "transparent", fontSize: 10, color: active ? EMERALD : "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", gap: 4, transition: "all 0.3s" }}>
+                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: active ? EMERALD : "rgba(255,255,255,0.2)", transition: "all 0.3s" }} /> {label}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={triggerScan} disabled={scanning} style={{ padding: "13px 40px", border: `1px solid ${CYAN}`, borderRadius: 12, background: scanning ? `${CYAN}08` : `${CYAN}15`, color: CYAN, fontSize: 14, fontWeight: 600, cursor: scanning ? "not-allowed" : "pointer", fontFamily: "Poppins", ...neonCyan, transition: "all 0.2s" }}>
+                  {scanning ? <><RefreshCw size={14} style={{ display: "inline", marginRight: 8, animation: "spin 1s linear infinite" }} />Scanning...</> : <><Zap size={14} style={{ display: "inline", marginRight: 8 }} />Mark Attendance</>}
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -1070,8 +1128,9 @@ function DashboardPage({ user }: { user: UserRecord }) {
   );
 }
 
-function AttendancePage() {
+function AttendancePage({ user, attendanceLog }: { user: UserRecord; attendanceLog: AttendanceRecord[] }) {
   const [view, setView] = useState("weekly");
+  const isTeacher = user?.class === "teacher";
   return (
     <div style={{ padding: "24px 24px 24px 88px", minHeight: "100vh" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
@@ -1080,6 +1139,14 @@ function AttendancePage() {
           <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Comprehensive analytics & export</p>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          {isTeacher && (
+            <button
+              onClick={() => exportAttendanceCSV(attendanceLog)}
+              style={{ padding: "7px 16px", borderRadius: 8, border: `1px solid ${EMERALD}`, background: `${EMERALD}15`, color: EMERALD, fontSize: 12, cursor: "pointer", fontFamily: "Poppins", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Download size={12} /> Download CSV
+            </button>
+          )}
           {["weekly", "monthly"].map(v => (
             <button key={v} onClick={() => setView(v)} style={{ padding: "7px 16px", borderRadius: 8, border: `1px solid ${view === v ? CYAN : "rgba(255,255,255,0.1)"}`, background: view === v ? `${CYAN}15` : "transparent", color: view === v ? CYAN : "rgba(255,255,255,0.4)", fontSize: 12, cursor: "pointer", fontFamily: "Poppins" }}>
               {v.charAt(0).toUpperCase() + v.slice(1)}
@@ -1206,7 +1273,7 @@ function AttendancePage() {
   );
 }
 
-function StudentDashboard({ user, registeredUsers }: { user: UserRecord; registeredUsers: UserRecord[] }) {
+function StudentDashboard({ user, registeredUsers, attendanceLog }: { user: UserRecord; registeredUsers: UserRecord[]; attendanceLog: AttendanceRecord[] }) {
   const isTeacher = user?.class === "teacher";
   const me = DEFAULT_STUDENTS.find(s => s.roll === (user as Student).roll) || DEFAULT_STUDENTS[0];
   const pct = Math.round(me.present / me.total * 100);
@@ -1357,8 +1424,30 @@ function StudentDashboard({ user, registeredUsers }: { user: UserRecord; registe
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <Users size={14} color={CYAN} />
             <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase" }}>Student Records</span>
-            <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.3)" }}>{students.length} students · Click Edit to modify records</span>
+            <span style={{ marginLeft: "auto", fontSize: 11, color: "rgba(255,255,255,0.3)", marginRight: 8 }}>{students.length} students · Click Edit to modify records</span>
+            <button
+              onClick={() => exportAttendanceCSV(attendanceLog)}
+              style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${EMERALD}`, background: `${EMERALD}15`, color: EMERALD, fontSize: 11, cursor: "pointer", fontFamily: "Poppins", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}
+            >
+              <Download size={11} /> Download CSV
+            </button>
           </div>
+
+          {attendanceLog.length > 0 && (
+            <div style={{ ...glass, padding: 16, borderColor: `${EMERALD}22`, marginBottom: 4 }}>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Today's Live Attendance Log ({attendanceLog.filter(r => r.date === new Date().toISOString().split("T")[0]).length} marked)</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 200, overflowY: "auto" }}>
+                {attendanceLog.filter(r => r.date === new Date().toISOString().split("T")[0]).map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: 8, background: `${EMERALD}08`, border: `1px solid ${EMERALD}22` }}>
+                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: EMERALD, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#fff", flex: 1 }}>{r.name}</span>
+                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>{r.roll}</span>
+                    <span style={{ fontSize: 10, color: EMERALD }}>{r.time}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {students.map((s, i) => {
             const p = Math.round(s.present / s.total * 100);
@@ -1455,6 +1544,41 @@ function StudentDashboard({ user, registeredUsers }: { user: UserRecord; registe
 }
 
 const STORAGE_KEY = "sa_registered_users";
+const ATTENDANCE_KEY = "sa_attendance_log";
+
+interface AttendanceRecord {
+  userId: string;
+  name: string;
+  roll: string;
+  dept: string;
+  date: string;
+  time: string;
+  status: "present";
+}
+
+function loadAttendanceLog(): AttendanceRecord[] {
+  try {
+    const raw = localStorage.getItem(ATTENDANCE_KEY);
+    return raw ? (JSON.parse(raw) as AttendanceRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function exportAttendanceCSV(records: AttendanceRecord[]) {
+  const header = "Name,Roll No,Department,Date,Login Time,Status";
+  const rows = records.map(r =>
+    `"${r.name}","${r.roll}","${r.dept}","${r.date}","${r.time}","${r.status}"`
+  );
+  const csv = [header, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `attendance_${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function loadStoredUsers(): UserRecord[] {
   try {
@@ -1470,12 +1594,26 @@ export default function App() {
   const [user, setUser] = useState<UserRecord | null>(null);
   const [page, setPage] = useState("dashboard");
   const [registeredUsers, setRegisteredUsers] = useState<UserRecord[]>(loadStoredUsers);
+  const [attendanceLog, setAttendanceLog] = useState<AttendanceRecord[]>(loadAttendanceLog);
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(registeredUsers));
     } catch {}
   }, [registeredUsers]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ATTENDANCE_KEY, JSON.stringify(attendanceLog));
+    } catch {}
+  }, [attendanceLog]);
+
+  const handleMarkAttendance = (record: AttendanceRecord) => {
+    setAttendanceLog(prev => {
+      const alreadyExists = prev.some(r => r.userId === record.userId && r.date === record.date);
+      return alreadyExists ? prev : [...prev, record];
+    });
+  };
 
   const handleLogin = (u: UserRecord | { goto: string }) => {
     if ("goto" in u && u.goto === "register") { setScreen("register"); return; }
@@ -1510,9 +1648,9 @@ export default function App() {
           {screen === "app" && user && (
             <>
               <Sidebar page={page} setPage={setPage} user={user} onLogout={() => { setUser(null); setScreen("login"); setPage("dashboard"); }} />
-              {page === "dashboard" && <DashboardPage user={user} />}
-              {page === "attendance" && <AttendancePage />}
-              {page === "students" && <StudentDashboard user={user} registeredUsers={registeredUsers} />}
+              {page === "dashboard" && <DashboardPage user={user} attendanceLog={attendanceLog} onMarkAttendance={handleMarkAttendance} />}
+              {page === "attendance" && <AttendancePage user={user} attendanceLog={attendanceLog} />}
+              {page === "students" && <StudentDashboard user={user} registeredUsers={registeredUsers} attendanceLog={attendanceLog} />}
               {page === "settings" && (
                 <div style={{ padding: "24px 24px 24px 88px" }}>
                   <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24 }}>Settings</h1>
